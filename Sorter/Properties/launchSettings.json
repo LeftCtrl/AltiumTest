@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Sorter": {
+      "commandName": "Project",
+      "commandLineArgs": " \"L:\\tmp\\unsorted.txt\" \"L:\\tmp\\sorted.txt\" 0.5 1"
+    }
+  }
+}

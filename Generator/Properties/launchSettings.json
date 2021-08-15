@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Generator": {
+      "commandName": "Project",
+      "commandLineArgs": " \"L:\\tmp\\unsorted.txt\" 10 1024 100"
+    }
+  }
+}
