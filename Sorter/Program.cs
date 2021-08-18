@@ -9,13 +9,11 @@ namespace Sorter
         public static void Main(string[] args)
         {
             float bufferSizeInGb;
-            int splitCount;
             if (args.Length < 4
-                || !float.TryParse(args[2], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out bufferSizeInGb)
-                || !int.TryParse(args[3], out splitCount))
+                || !float.TryParse(args[2], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out bufferSizeInGb))
             {
-                Console.WriteLine("Usage with arguments: inputFile outputFile bufferSizeInGb splitCount");
-                Console.WriteLine(@"Example: C:\unsorted.txt C:\sorted.txt 0.5 1");
+                Console.WriteLine("Usage with arguments: inputFile outputFile bufferSizeInGb");
+                Console.WriteLine(@"Example: C:\unsorted.txt C:\sorted.txt 0.5");
                 return;
             }
 
@@ -23,7 +21,7 @@ namespace Sorter
             timer.Start();
 
             Console.WriteLine($"Creating {args[1]}...");
-            new Sorter(bufferSizeInGb).Sort(args[0], args[1], splitCount);
+            new Sorter(bufferSizeInGb).Sort(args[0], args[1]);
             Console.WriteLine($"Sort time: {timer.Elapsed.ToString("h'h 'm'm 's's'")}");
         }
     }

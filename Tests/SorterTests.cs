@@ -15,12 +15,12 @@ namespace Tests
         [OneTimeSetUp]
         public void Init()
         {
-            Generator.Generator.CreateFile(_inputFile, 1, 1024, 25);
+            Generator.Generator.CreateFile(_inputFile, 10, 1024, 25);
 
             var timer = new Stopwatch();
             timer.Start();
 
-            new Sorter.Sorter(0.5f).Sort(_inputFile, _outputFile, 1);
+            new Sorter.Sorter(0.1f).Sort(_inputFile, _outputFile);
             _elapsedBySort = timer.Elapsed;
         }
 

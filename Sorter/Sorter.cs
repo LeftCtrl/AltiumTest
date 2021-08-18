@@ -11,154 +11,76 @@ namespace Sorter
     {
         private readonly LineComparer _lineComparer = new LineComparer();
         private readonly float _bufferSizeInBytes;
+        private readonly int _newLineLength = Environment.NewLine.Length;
 
         public Sorter(float bufferSizeInGb)
         {
             _bufferSizeInBytes = bufferSizeInGb * 1024 * 1024 * 1024;
         }
 
-        public void Sort(string inputPath, string outputPath, int splitCount)
+        public void Sort(string inputPath, string outputPath)
         {
-            if (File.Exists(outputPath))
-                File.Delete(outputPath);
-
-            string[] files = SplitByFirstSymbols(inputPath, outputPath, splitCount);
-            
-            foreach (var file in files)
-            {
-                SortAndAppendToOutputFile(file, outputPath);
-                File.Delete(file);
-            }
+            List<string> sortedFiles = SplitByBufferSize(inputPath, outputPath);
+            MergeSortedFiles(sortedFiles, outputPath);
         }
 
-        private string[] SplitByFirstSymbols(string inputPath, string outputPath, int symbolCount)
+        private List<string> SplitByBufferSize(string inputPath, string outputPath)
         {
-            var writers = new Dictionary<string, (string Path, StreamWriter Writer)>();
-            
-            try
-            {
-                using LineReader reader = new LineReader(inputPath);
-
-                int delimeterIndex;
-                StreamWriter writer;
-                string key;
-                while (reader.Line != null)
-                {
-                    delimeterIndex = reader.Line.IndexOf(Settings.Delimiter);
-
-                    key = reader.Line.Substring(delimeterIndex + Settings.Delimiter.Length);
-                    if (key.Length > symbolCount)
-                        key = key.Substring(0, symbolCount);
-
-                    if (!writers.ContainsKey(key))
-                    {
-                        string tmpOutputPath = $"{outputPath}_{writers.Count}";
-                        writers.Add(key, (tmpOutputPath, new StreamWriter(tmpOutputPath)));
-                    }
-
-                    writer = writers[key].Writer;
-                    writer.WriteLine(reader.Line);
-                    reader.ReadLine();
-                }
-            }
-            finally
-            {
-                foreach (var writer in writers)
-                    writer.Value.Writer.Dispose();
-            }
-
-            List<string> sortedKeys = writers.Keys.ToList();
-            sortedKeys.Sort(StringComparer.Ordinal);
-
-            return sortedKeys.Select(x => writers[x].Path).ToArray();
-        }
-
-        private void SortAndAppendToOutputFile(string inputPath, string outputPath)
-        {
-            int newLineLength = Environment.NewLine.Length;
+            using LineReader reader = new LineReader(inputPath);
 
             var sortedFiles = new List<string>();
-            using (LineReader reader = new LineReader(inputPath))
+            var lines = new List<string>();
+            float currentSize = 0;
+            while (reader.Line != null)
             {
-                var lines = new List<string>();
-                float currentSize = 0;
-                while (reader.Line != null)
+                lines.Add(reader.Line);
+                currentSize += reader.Line.Length + _newLineLength;
+
+                reader.ReadLine();
+                if (currentSize >= _bufferSizeInBytes)
                 {
-                    lines.Add(reader.Line);
-                    currentSize += reader.Line.Length + newLineLength;
-
-                    reader.ReadLine();
-                    if (currentSize >= _bufferSizeInBytes)
-                    {
-                        currentSize = 0;
-                        WriteToFile(sortedFiles, lines, outputPath, reader.Line == null);
-                    }
+                    currentSize = 0;
+                    SortAndWriteToFile(outputPath, lines, sortedFiles);
+                    lines.Clear();
                 }
-
-                if (lines.Count > 0)
-                    WriteToFile(sortedFiles, lines, outputPath, true);
             }
 
-            if (sortedFiles.Count > 0)
-                MergeSortedFiles(sortedFiles, outputPath);
+            if (lines.Count > 0)
+                SortAndWriteToFile(outputPath, lines, sortedFiles);
+
+            return sortedFiles;
         }
 
-        private void WriteToFile(
-            List<string> sortedFiles, List<string> lines, string outputPath, bool isLastFile)
+        private void SortAndWriteToFile(string outputPath, List<string> lines, List<string> sortedFiles)
         {
-            lines.Sort(_lineComparer);
-            if (isLastFile && sortedFiles.Count == 0)
-            {
-                File.AppendAllLines(outputPath, lines, Settings.Encoding);
-            }
-            else
-            {
-                string sortedFile = $"{outputPath}_sorted{sortedFiles.Count}";
-                sortedFiles.Add(sortedFile);
-                File.WriteAllLines(sortedFile, lines, Settings.Encoding);
-            }
-
-            lines.Clear();
+            lines.Sort(_lineComparer); //TODO: parallel sort?
+            string sortedFile = $"{outputPath}_sorted{sortedFiles.Count}";
+            sortedFiles.Add(sortedFile);
+            File.WriteAllLines(sortedFile, lines, Settings.Encoding);
         }
 
         private void MergeSortedFiles(List<string> inputFiles, string outputPath)
         {
-            int tempFileNumber = 0;
-            string file1;
-            string file2;
-            string tempOutputPath;
-
-            var filesToMerge = new Queue<string>(inputFiles);
-            while (true)
+            if (inputFiles.Count == 1)
             {
-                file1 = filesToMerge.Dequeue();
-                file2 = filesToMerge.Dequeue();
-
-                if (filesToMerge.Count == 0)
-                {
-                    MergeSortedFiles(file1, file2, outputPath, true);
-                    break;
-                }
-
-                tempOutputPath = filesToMerge.Count > 0 ? $"{outputPath}_merged{tempFileNumber++}" : outputPath;
-                MergeSortedFiles(file1, file2, tempOutputPath, false);
-                filesToMerge.Enqueue(tempOutputPath);
+                File.Move(inputFiles[0], outputPath);
+                return;
             }
-        }
 
-        private void MergeSortedFiles(string file1, string file2, string outputPath, bool append)
-        {
-            using (StreamWriter writer = new StreamWriter(outputPath, append, Settings.Encoding))
-            using (LineReader reader1 = new LineReader(file1))
-            using (LineReader reader2 = new LineReader(file2))
+            List<LineReader> readers = inputFiles
+                .Select(file => new LineReader(file))
+                .ToList();
+
+            try
             {
-                LineReader currentReader = reader1;
+                readers.Sort((x, y) => _lineComparer.Compare(x.Line, y.Line));
+
+                using StreamWriter writer = new StreamWriter(outputPath, false, Settings.Encoding);
                 var sb = new StringBuilder();
-                bool lastReader = false;
-                while (true)
+                LineReader currentReader;
+                while (readers.Count > 0)
                 {
-                    if (!lastReader)
-                        currentReader = _lineComparer.Compare(reader1.Line, reader2.Line) < 0 ? reader1 : reader2;
+                    currentReader = readers.Pop();
 
                     sb.AppendLine(currentReader.Line);
                     if (sb.Length >= _bufferSizeInBytes)
@@ -168,21 +90,29 @@ namespace Sorter
                     }
 
                     currentReader.ReadLine();
-                    if (currentReader.Line == null)
+                    if (currentReader.Line != null)
                     {
-                        if (lastReader)
-                            break;
+                        var i = 0;
+                        while (i < readers.Count) //TODO: binary search!
+                        {
+                            if (_lineComparer.Compare(currentReader.Line, readers[i].Line) <= 0)
+                                break;
 
-                        lastReader = true;
-                        currentReader = currentReader == reader1 ? reader2 : reader1;
+                            i++;
+                        }
+
+                        readers.Insert(i, currentReader);
                     }
                 }
-
-                writer.Write(sb);
             }
+            finally
+            {
+                foreach (var reader in readers)
+                    reader.Dispose();
 
-            File.Delete(file1);
-            File.Delete(file2);
+                foreach (var file in inputFiles)
+                    File.Delete(file);
+            } 
         }
     }
 }
