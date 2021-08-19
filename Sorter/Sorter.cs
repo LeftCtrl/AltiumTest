@@ -41,7 +41,6 @@ namespace Sorter
                 {
                     currentSize = 0;
                     SortAndWriteToFile(outputPath, lines, sortedFiles);
-                    lines.Clear();
                 }
             }
 
@@ -57,6 +56,7 @@ namespace Sorter
             string sortedFile = $"{outputPath}_sorted{sortedFiles.Count}";
             sortedFiles.Add(sortedFile);
             File.WriteAllLines(sortedFile, lines, Settings.Encoding);
+            lines.Clear();
         }
 
         private void MergeSortedFiles(List<string> inputFiles, string outputPath)
@@ -103,7 +103,11 @@ namespace Sorter
 
                         readers.Insert(i, currentReader);
                     }
+                    else
+                        currentReader.Dispose();
                 }
+
+                writer.Write(sb);
             }
             finally
             {
