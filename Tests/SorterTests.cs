@@ -11,6 +11,8 @@ namespace Tests
         private string _inputFile = @"unsorted.txt";
         private string _outputFile = @"sorted.txt";
         private TimeSpan _elapsedBySort;
+        private float _partSizeInGb = 0.5f;
+        private float _peakWorkingSet64;
 
         [OneTimeSetUp]
         public void Init()
@@ -20,8 +22,10 @@ namespace Tests
             var timer = new Stopwatch();
             timer.Start();
 
-            new Sorter.Sorter(0.1f).Sort(_inputFile, _outputFile);
+            new Sorter.Sorter(_partSizeInGb).Sort(_inputFile, _outputFile);
+            
             _elapsedBySort = timer.Elapsed;
+            _peakWorkingSet64 = (float)Process.GetCurrentProcess().PeakWorkingSet64 / (1024 * 1024 * 1024);
         }
 
         [OneTimeTearDown]
@@ -78,6 +82,13 @@ namespace Tests
             double minutes = _elapsedBySort.TotalMinutes;
 
             Assert.LessOrEqual(minutes, gb);
+        }
+
+        [Test]
+        [Ignore("For debug. Result depends on the input parameters and pc configuration")]
+        public void ShouldUseNotMoreThan5PartSizeMemory()
+        {
+            Assert.LessOrEqual(_peakWorkingSet64, _partSizeInGb * 5);
         }
     }
 }

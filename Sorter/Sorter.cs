@@ -52,11 +52,17 @@ namespace Sorter
 
         private void SortAndWriteToFile(string outputPath, List<string> lines, List<string> sortedFiles)
         {
-            lines.Sort(_lineComparer); //TODO: parallel sort?
             string sortedFile = $"{outputPath}_sorted{sortedFiles.Count}";
             sortedFiles.Add(sortedFile);
-            File.WriteAllLines(sortedFile, lines, Settings.Encoding);
+
+            var sortedList = lines
+                .AsParallel()
+                .OrderBy(x => x, _lineComparer)
+                .ToArray();
+
             lines.Clear();
+
+            File.WriteAllLines(sortedFile, sortedList);
         }
 
         private void MergeSortedFiles(List<string> inputFiles, string outputPath)
@@ -93,7 +99,7 @@ namespace Sorter
                     if (currentReader.Line != null)
                     {
                         var i = 0;
-                        while (i < readers.Count) //TODO: binary search!
+                        while (i < readers.Count) //TODO: binary search? It is not a bottleneck
                         {
                             if (_lineComparer.Compare(currentReader.Line, readers[i].Line) <= 0)
                                 break;
