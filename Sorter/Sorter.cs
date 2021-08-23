@@ -98,16 +98,7 @@ namespace Sorter
                     currentReader.ReadLine();
                     if (currentReader.Line != null)
                     {
-                        var i = 0;
-                        while (i < readers.Count) //TODO: binary search? It is not a bottleneck
-                        {
-                            if (_lineComparer.Compare(currentReader.Line, readers[i].Line) <= 0)
-                                break;
-
-                            i++;
-                        }
-
-                        readers.Insert(i, currentReader);
+                        BinaryInsert(readers, currentReader);
                     }
                     else
                         currentReader.Dispose();
@@ -123,6 +114,34 @@ namespace Sorter
                 foreach (var file in inputFiles)
                     File.Delete(file);
             } 
+        }
+
+        private void BinaryInsert(List<LineReader> readers, LineReader reader)
+        {
+            int lo = 0;
+            int hi = readers.Count - 1;
+            while (lo <= hi)
+            {
+                int i = lo + ((hi - lo) >> 1);
+                int order = _lineComparer.Compare(readers[i].Line, reader.Line);
+
+                if (order == 0)
+                {
+                    readers.Insert(i, reader);
+                    return;
+                }
+
+                if (order < 0)
+                {
+                    lo = i + 1;
+                }
+                else
+                {
+                    hi = i - 1;
+                }
+            }
+
+            readers.Insert(lo, reader);
         }
     }
 }
